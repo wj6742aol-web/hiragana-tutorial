@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>일본어 튜토리얼</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="ink-wash" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <button type="button" class="brand" data-nav="home" aria-label="홈으로">
+        일본어 튜토리얼
+      </button>
+      <nav class="nav">
+        <button type="button" data-nav="home">홈</button>
+        <button type="button" data-nav="learn" hidden>배우기</button>
+        <button type="button" data-nav="quiz" hidden>퀴즈</button>
+      </nav>
+      <p class="progress-chip" id="progressChip">튜토리얼 선택</p>
+    </header>
+
+    <main id="app"></main>
+
+    <script src="data/hiragana.js"></script>
+    <script src="data/katakana.js"></script>
+    <script src="data/greetings.js"></script>
+    <script src="data/numbers.js"></script>
+    <script src="data/vocab.js"></script>
+    <script src="data/vocab-n5-extra.js"></script>
+    <script src="data/vocab-n4-extra.js"></script>
+    <script src="data/vocab-n2.js"></script>
+    <script src="data/vocab-n1.js"></script>
+    <script src="data/vocab-daily.js"></script>
+    <!-- JLPT 확장 단어 (한국어 뜻 정적) + 누적 세트 -->
+    <script src="data/vocab-n5-ko.js"></script>
+    <script src="data/vocab-n4-ko.js"></script>
+    <script src="data/vocab-n3-ko.js"></script>
+    <script src="data/vocab-n2-ko.js"></script>
+    <script src="data/vocab-n1-ko.js"></script>
+    <script src="data/vocab-cumulative-ko.js"></script>
+    <script src="data/tutorials.js"></script>
+    <script src="js/translate.js"></script>
+    <script src="js/api.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

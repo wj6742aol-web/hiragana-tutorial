@@ -1,0 +1,6 @@
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+data/jlpt-ko/*.en.json
+data/jlpt-ko/meaning-cache.json

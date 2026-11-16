@@ -1,0 +1,10 @@
+{
+  "name": "hiragana-tutorial",
+  "version": "1.0.0",
+  "private": true,
+  "description": "히라가나, 카타카나, 인사, JLPT 단어를 익히는 일본어 튜토리얼",
+  "scripts": {
+    "start": "python3 -m http.server 5540 --bind 127.0.0.1",
+    "dev": "python3 -m http.server 5540 --bind 127.0.0.1"
+  }
+}
