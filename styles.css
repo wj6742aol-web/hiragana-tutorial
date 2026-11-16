@@ -121,11 +121,7 @@ body {
 }
 
 /* —— Hub —— */
-.hub-hero {
-  min-height: auto;
-  padding-top: 4.5rem;
-  padding-bottom: 1.5rem;
-}
+/* hub-hero min-height overridden below near .hero */
 
 .hub-section {
   padding-top: 0.5rem;
@@ -540,6 +536,13 @@ body {
   padding: clamp(1.5rem, 4vw, 3rem);
   position: relative;
   overflow: hidden;
+}
+
+.hero.hub-hero {
+  min-height: 0;
+  padding-top: 5rem;
+  padding-bottom: 1.25rem;
+  align-items: end;
 }
 
 .hero-copy {
