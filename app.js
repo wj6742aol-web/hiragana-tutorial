@@ -112,10 +112,24 @@
     return knownSet(t.id).size;
   }
 
+  function progressPct(done, all) {
+    return all ? Math.round((done / all) * 100) : 0;
+  }
+
+  function progressBarHtml(done, all, label = "") {
+    const pct = progressPct(done, all);
+    return `
+      <div class="progress-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${escHtml(label || "학습 진행")}">
+        <span class="progress-fill" style="width:${pct}%"></span>
+      </div>`;
+  }
+
   function updateProgress() {
     const t = tutorial();
     if (t) {
-      progressChip.textContent = `${t.title} ${knownCount(t)} / ${totalCount(t)}`;
+      const done = knownCount(t);
+      const all = totalCount(t);
+      progressChip.innerHTML = `<span>${escHtml(t.title)}</span><strong>${done}/${all}</strong>`;
       return;
     }
     if (view.name === "group" && view.groupId) {
@@ -123,15 +137,17 @@
       const done = items.reduce((n, x) => n + knownCount(x), 0);
       const all = items.reduce((n, x) => n + totalCount(x), 0);
       const g = window.getTutorialGroup(view.groupId);
-      progressChip.textContent = `${g?.title || "분류"} ${done} / ${all}`;
+      progressChip.innerHTML = `<span>${escHtml(g?.title || "분류")}</span><strong>${done}/${all}</strong>`;
       return;
     }
     const done = window.TUTORIALS.reduce((n, x) => n + knownCount(x), 0);
     const all = window.TUTORIALS.reduce((n, x) => n + totalCount(x), 0);
-    progressChip.textContent = `전체 ${done} / ${all}`;
+    progressChip.innerHTML = `<span>전체</span><strong>${done}/${all}</strong>`;
   }
 
   function setNav(active) {
+    const homeBtn = document.querySelector('.nav [data-nav="home"]');
+    if (homeBtn) homeBtn.hidden = view.name === "home";
     navLearn.hidden = !view.tutorialId;
     navQuiz.hidden = !view.tutorialId;
     document.querySelectorAll(".nav button").forEach((btn) => {
@@ -140,6 +156,37 @@
         btn.dataset.nav === active ? "page" : "false"
       );
     });
+  }
+
+  function resolveGroupId() {
+    if (view.groupId) return view.groupId;
+    return tutorial()?.groupId || null;
+  }
+
+  function goToGroupOrHome() {
+    const gid = resolveGroupId();
+    if (gid) go({ name: "group", groupId: gid });
+    else go({ name: "home" });
+  }
+
+  function pageHeaderHtml({ backLabel, backAction = "back-up", title, blurb, done, all }) {
+    const showBar = typeof done === "number" && typeof all === "number" && all > 0;
+    return `
+      <header class="page-header">
+        <button type="button" class="back-link" data-action="${backAction}">← ${escHtml(backLabel)}</button>
+        <div class="page-header-copy">
+          <h2>${escHtml(title)}</h2>
+          ${blurb ? `<p>${blurb}</p>` : ""}
+        </div>
+        ${
+          showBar
+            ? `<div class="page-header-progress">
+                <span class="page-header-count">${done} / ${all} · ${progressPct(done, all)}%</span>
+                ${progressBarHtml(done, all, title)}
+              </div>`
+            : ""
+        }
+      </header>`;
   }
 
   function shuffle(arr) {
@@ -156,7 +203,17 @@
 
   function go(next) {
     stopListen();
-    view = next;
+    const prevGroup = view.groupId;
+    view = { ...next };
+    if (view.name === "home") {
+      delete view.groupId;
+    } else if (!view.groupId) {
+      view.groupId =
+        prevGroup ||
+        (view.tutorialId
+          ? window.getTutorial(view.tutorialId)?.groupId
+          : undefined);
+    }
     render();
   }
 
@@ -403,7 +460,7 @@
                 <p>${result.error}. 로컬(한국어) 단어 세트로 이어갈게요.</p>
                 <div class="cta-row" style="justify-content:center;">
                   <button type="button" class="btn btn-primary" data-action="cont">로컬로 계속</button>
-                  <button type="button" class="btn btn-ghost" data-action="hub">홈</button>
+                  <button type="button" class="btn btn-ghost" data-action="hub">분류로</button>
                 </div>
               </div>
             </section>`;
@@ -412,7 +469,7 @@
             renderLearnOrQuiz(name);
           };
           app.querySelector('[data-action="hub"]').onclick = () =>
-            go({ name: "home" });
+            goToGroupOrHome();
           return;
         }
         updateProgress();
@@ -434,27 +491,31 @@
   function tutorialCardHtml(t) {
     const known = knownCount(t);
     const total = totalCount(t);
-    const pct = total ? Math.round((known / total) * 100) : 0;
-    const remoteBadge = t.remoteLevel
-      ? `<span class="api-badge">KO</span>`
-      : "";
+    const pct = progressPct(known, total);
     return `
       <button type="button" class="tutorial-card" data-tutorial="${escHtml(t.id)}">
         <span class="tutorial-accent" aria-hidden="true">${escHtml(t.accent)}</span>
-        <strong>${escHtml(t.title)}${remoteBadge}</strong>
+        <strong>${escHtml(t.title)}</strong>
         <span class="tutorial-blurb">${escHtml(t.blurb)}</span>
-        <span class="tutorial-meta">${known} / ${total} · ${pct}%</span>
+        <span class="tutorial-meta">
+          <span>${known} / ${total}</span>
+          <span>${pct}%</span>
+        </span>
+        ${progressBarHtml(known, total, t.title)}
       </button>`;
   }
 
   function bindTutorialCards(root) {
     root.querySelectorAll("[data-tutorial]").forEach((btn) => {
-      btn.onclick = () =>
+      btn.onclick = () => {
+        const t = window.getTutorial(btn.dataset.tutorial);
         go({
           name: "learn",
           tutorialId: btn.dataset.tutorial,
+          groupId: view.groupId || t?.groupId,
           filter: "",
         });
+      };
     });
   }
 
@@ -464,13 +525,16 @@
       const items = window.tutorialsInGroup(g.id);
       const done = items.reduce((n, x) => n + knownCount(x), 0);
       const all = items.reduce((n, x) => n + totalCount(x), 0);
-      const pct = all ? Math.round((done / all) * 100) : 0;
       return `
         <button type="button" class="category-card" data-group="${escHtml(g.id)}">
           <span class="tutorial-accent" aria-hidden="true">${escHtml(g.accent)}</span>
           <strong>${escHtml(g.title)}</strong>
           <span class="tutorial-blurb">${escHtml(g.blurb)}</span>
-          <span class="tutorial-meta">${items.length}개 코스 · ${done} / ${all} · ${pct}%</span>
+          <span class="tutorial-meta">
+            <span>${items.length}개 코스</span>
+            <span>${progressPct(done, all)}%</span>
+          </span>
+          ${progressBarHtml(done, all, g.title)}
         </button>`;
     }).join("");
 
@@ -483,10 +547,9 @@
         </div>
         <div class="hero-copy hub-copy">
           <p class="hero-brand">일본어 튜토리얼</p>
-          <h1>먼저 큰 주제를 고르세요</h1>
-          <p>문자 · 기초 · 실생활 · JLPT 중 하나를 고른 뒤, 세부 코스로 들어갑니다.</p>
+          <h1>학습할 범위를 고르세요</h1>
+          <p>한 번에 하나씩. 큰 주제 → 세부 코스 → 배우기·퀴즈.</p>
           <div class="category-grid hub-categories">${cards}</div>
-          <p class="api-credit">${escHtml(window.NihongoAPI?.attribution || "")}</p>
         </div>
       </section>
     `;
@@ -504,30 +567,38 @@
       return;
     }
     const items = window.tutorialsInGroup(g.id);
-    const showDaily = g.id === "daily" || g.id === "jlpt";
+    const done = items.reduce((n, x) => n + knownCount(x), 0);
+    const all = items.reduce((n, x) => n + totalCount(x), 0);
+    const showDaily = g.id === "daily";
 
     app.innerHTML = `
       <section class="section group-section">
-        <button type="button" class="back-link" data-action="back-home">← 학습 범위</button>
-        <div class="section-head group-head">
-          <p class="group-kicker" aria-hidden="true">${escHtml(g.accent)}</p>
-          <h2>${escHtml(g.title)}</h2>
-          <p>${escHtml(g.blurb)}</p>
+        ${pageHeaderHtml({
+          backLabel: "학습 범위",
+          backAction: "back-home",
+          title: g.title,
+          blurb: escHtml(g.blurb),
+          done,
+          all,
+        })}
+        <div class="course-block">
+          <div class="section-head compact">
+            <h3 class="hub-group-title">코스 선택</h3>
+            <p>원하는 코스를 누르면 바로 배우기로 이동합니다.</p>
+          </div>
+          <div class="tutorial-grid">${items.map(tutorialCardHtml).join("")}</div>
         </div>
         ${
           showDaily
-            ? `<div class="section-head">
-                <h3 class="hub-group-title">오늘의 랜덤 단어</h3>
-                <p id="dailyApiStatus">불러오는 중…</p>
-              </div>
-              <div class="daily-api-row" id="dailyApiRow"></div>`
+            ? `<aside class="daily-panel" aria-label="오늘의 연습">
+                <div class="section-head compact">
+                  <h3 class="hub-group-title">오늘의 빠른 연습</h3>
+                  <p id="dailyApiStatus">불러오는 중…</p>
+                </div>
+                <div class="daily-api-row" id="dailyApiRow"></div>
+              </aside>`
             : ""
         }
-        <div class="section-head" style="${showDaily ? "margin-top:1.75rem;" : ""}">
-          <h3 class="hub-group-title">세부 코스</h3>
-          <p>하나를 골라 배우기·퀴즈로 이어가 보세요.</p>
-        </div>
-        <div class="tutorial-grid">${items.map(tutorialCardHtml).join("")}</div>
       </section>
     `;
 
@@ -542,18 +613,18 @@
     try {
       if (!window.NihongoAPI) throw new Error("API 모듈 없음");
       const words = await window.NihongoAPI.randomWords(5, 6);
-      status.textContent = "N5 랜덤 단어 · 탭하면 바로 학습";
+      status.textContent = "탭하면 바로 학습";
       view._daily = words;
       paintDaily(row, words);
     } catch (err) {
       const pool = window.VOCAB_REMOTE?.n5 || [];
       if (pool.length) {
         const words = shuffle(pool).slice(0, 6);
-        status.textContent = "N5 랜덤 단어 (로컬) · 탭하면 바로 학습";
+        status.textContent = "로컬 단어 · 탭하면 바로 학습";
         view._daily = words;
         paintDaily(row, words);
       } else {
-        status.textContent = "랜덤 단어를 준비하지 못했어요.";
+        status.textContent = "지금은 빠른 연습을 준비하지 못했어요.";
         row.innerHTML = "";
       }
     }
@@ -564,9 +635,9 @@
       .map(
         (w, i) => `
         <button type="button" class="daily-chip" data-daily="${i}">
-          <strong>${w.jp}</strong>
-          <span>${w.reading}</span>
-          <em>${w.ko}</em>
+          <strong>${escHtml(w.jp)}</strong>
+          <span>${escHtml(w.reading)}</span>
+          <em>${escHtml(w.ko)}</em>
         </button>`
       )
       .join("");
@@ -577,6 +648,7 @@
         go({
           name: "phrase-lesson",
           tutorialId: "vocab-n5",
+          groupId: "daily",
           index: 0,
           activity: "look",
           spotItem: item,
@@ -595,38 +667,41 @@
   function renderKanaLearn(t) {
     const rows = t.getRows();
     const known = knownSet(t.id);
+    const done = knownCount(t);
+    const all = totalCount(t);
     const cards = rows
       .map((row) => {
-        const done = row.chars.every((c) => known.has(c.kana));
+        const rowDone = row.chars.filter((c) => known.has(c.kana)).length;
+        const complete = rowDone === row.chars.length;
         const preview = row.chars.map((c) => c.kana).join("");
         return `
-          <button type="button" class="row-btn${done ? " done" : ""}" data-row="${row.id}">
+          <button type="button" class="row-btn${complete ? " done" : ""}" data-row="${row.id}">
             <div class="kana-preview">${preview}</div>
-            <strong>${row.title}</strong>
-            <span>${row.chars.length}글자${done ? " · 완료" : ""}</span>
+            <strong>${escHtml(row.title)}</strong>
+            <span>${rowDone}/${row.chars.length}${complete ? " · 완료" : ""}</span>
+            ${progressBarHtml(rowDone, row.chars.length, row.title)}
           </button>`;
       })
       .join("");
 
     app.innerHTML = `
       <section class="section">
-        <div class="lesson-top">
-          <button type="button" class="back-link" data-action="hub">← 튜토리얼 목록</button>
-          <h2 style="margin:0;font-family:var(--font-display);">${t.title}</h2>
-        </div>
-        <div class="section-head">
-          <h2>행 고르기</h2>
-          <p>${t.blurb} 듣고·맞춰 보고·쓰며 익혀 보세요.</p>
-        </div>
+        ${pageHeaderHtml({
+          backLabel: "코스 목록",
+          backAction: "hub",
+          title: t.title,
+          blurb: `${escHtml(t.blurb)} 행을 고른 뒤 듣고·맞춰 보고·쓰며 익혀 보세요.`,
+          done,
+          all,
+        })}
         <div class="row-grid">${cards}</div>
-        <div class="cta-row" style="margin-top:1.5rem;">
-          <button type="button" class="btn btn-primary" data-action="quiz">이 튜토리얼 퀴즈</button>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary" data-action="quiz">퀴즈로 확인</button>
         </div>
       </section>
     `;
 
-    app.querySelector('[data-action="hub"]').onclick = () =>
-      go({ name: "home" });
+    app.querySelector('[data-action="hub"]').onclick = () => goToGroupOrHome();
     app.querySelector('[data-action="quiz"]').onclick = () =>
       go({ name: "quiz", tutorialId: t.id });
     app.querySelectorAll("[data-row]").forEach((btn) => {
@@ -665,8 +740,8 @@
         <button type="button" class="phrase-row${
           known.has(item.id) ? " done" : ""
         }" data-index="${i}">
-          <span class="phrase-jp">${item.jp}</span>
-          <span class="phrase-ko">${item.ko}</span>
+          <span class="phrase-jp">${escHtml(item.jp)}</span>
+          <span class="phrase-ko">${escHtml(item.ko)}</span>
           <span class="phrase-mark">${known.has(item.id) ? "익힘" : "학습"}</span>
         </button>`
             )
@@ -676,41 +751,33 @@
 
     app.innerHTML = `
       <section class="section">
-        <div class="lesson-top">
-          <button type="button" class="back-link" data-action="hub">← 튜토리얼 목록</button>
-          <h2 style="margin:0;font-family:var(--font-display);">${t.title}</h2>
-        </div>
-        <div class="section-head">
-          <h2>${isVocab ? "단어 고르기" : "표현 고르기"}</h2>
-          <p>
-            ${t.blurb}
-            (익힘 ${known.size} / ${items.length}
-            ${
-              t.remoteLevel && window.VOCAB_REMOTE[t.remoteLevel]
-                ? " · <span class=\"api-badge\">OpenJLPT</span>"
-                : ""
-            })
-          </p>
-        </div>
+        ${pageHeaderHtml({
+          backLabel: "코스 목록",
+          backAction: "hub",
+          title: t.title,
+          blurb: `${escHtml(t.blurb)} ${isVocab ? "단어를" : "표현을"} 고르거나 검색해 학습하세요.`,
+          done: known.size,
+          all: items.length,
+        })}
         <div class="list-toolbar">
+          <label class="sr-only" for="listSearch">검색</label>
           <input
             type="search"
             class="recall-input list-search"
             id="listSearch"
-            placeholder="일본어·읽기·뜻·로마자 검색"
-            value="${(view.filter || "").replace(/"/g, "&quot;")}"
+            placeholder="일본어 · 읽기 · 뜻 · 로마자"
+            value="${escHtml(view.filter || "")}"
           />
-          <span class="list-count">${filtered.length}개 표시</span>
+          <span class="list-count">${filtered.length}개</span>
         </div>
         <div class="phrase-list">${list}</div>
-        <div class="cta-row" style="margin-top:1.5rem;">
-          <button type="button" class="btn btn-primary" data-action="quiz">이 튜토리얼 퀴즈</button>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary" data-action="quiz">퀴즈로 확인</button>
         </div>
       </section>
     `;
 
-    app.querySelector('[data-action="hub"]').onclick = () =>
-      go({ name: "home" });
+    app.querySelector('[data-action="hub"]').onclick = () => goToGroupOrHome();
     app.querySelector('[data-action="quiz"]').onclick = () =>
       go({ name: "quiz", tutorialId: t.id });
 
@@ -1846,15 +1913,22 @@
 
   function renderGenericQuiz(t, round, onCorrect, onSpeak, isPhrase = false) {
     if (view.qIndex >= round.length) {
+      const done = knownCount(t);
+      const all = totalCount(t);
       app.innerHTML = `
         <section class="section">
           <div class="result-panel">
-            <h2>${t.title} 퀴즈 끝!</h2>
-            <p>${round.length}문제 중 ${view.score}개 맞춤 · 익힘 ${knownCount(t)} / ${totalCount(t)}</p>
+            <p class="result-kicker">퀴즈 완료</p>
+            <h2>${escHtml(t.title)}</h2>
+            <p>${round.length}문제 중 <strong>${view.score}</strong>개 맞춤</p>
+            <div class="page-header-progress result-progress">
+              <span class="page-header-count">익힘 ${done} / ${all} · ${progressPct(done, all)}%</span>
+              ${progressBarHtml(done, all, t.title)}
+            </div>
             <div class="cta-row" style="justify-content:center;">
               <button type="button" class="btn btn-primary" data-action="again">한 번 더</button>
               <button type="button" class="btn btn-ghost" data-action="learn">배우기로</button>
-              <button type="button" class="btn btn-ghost" data-action="hub">홈</button>
+              <button type="button" class="btn btn-ghost" data-action="hub">분류로</button>
             </div>
           </div>
         </section>`;
@@ -1863,7 +1937,7 @@
       app.querySelector('[data-action="learn"]').onclick = () =>
         go({ name: "learn", tutorialId: t.id });
       app.querySelector('[data-action="hub"]').onclick = () =>
-        go({ name: "home" });
+        goToGroupOrHome();
       return;
     }
 
@@ -1888,32 +1962,42 @@
     const answerArea =
       q.type === "type_romaji"
         ? `<form class="recall-form" data-action="quiz-type" style="justify-content:center;">
+            <label class="sr-only" for="quizInput">로마자 답</label>
             <input id="quizInput" class="recall-input" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="로마자" />
             <button type="submit" class="btn btn-primary">확인</button>
           </form>`
         : `<div class="choices">${(q.options || [])
             .map(
               (opt) =>
-                `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
+                `<button type="button" class="choice" data-choice="${escHtml(opt)}">${escHtml(opt)}</button>`
             )
             .join("")}</div>`;
 
+    const step = view.qIndex + 1;
     app.innerHTML = `
       <section class="section">
-        <div class="section-head" style="text-align:center;">
-          <h2>${t.title} 퀴즈</h2>
-          <p>${q.prompt}</p>
-        </div>
+        ${pageHeaderHtml({
+          backLabel: "배우기",
+          backAction: "back-learn",
+          title: `${t.title} 퀴즈`,
+          blurb: escHtml(q.prompt),
+        })}
         <div class="quiz-board">
-          <p class="quiz-score">${view.qIndex + 1} / ${round.length} · ${view.score}점</p>
+          <div class="quiz-progress-wrap">
+            <p class="quiz-score">${step} / ${round.length} · ${view.score}점</p>
+            ${progressBarHtml(step - 1, round.length, "퀴즈 진행")}
+          </div>
           <div class="quiz-prompt">${promptHtml}</div>
           ${answerArea}
-          <p class="quiz-status" id="quizStatus"></p>
+          <p class="quiz-status" id="quizStatus" aria-live="polite"></p>
           <div class="lesson-controls" style="justify-content:center;margin-top:1rem;">
             <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
           </div>
         </div>
       </section>`;
+
+    app.querySelector('[data-action="back-learn"]').onclick = () =>
+      go({ name: "learn", tutorialId: t.id });
 
     app.querySelectorAll('[data-action="speak"]').forEach((btn) => {
       btn.onclick = () => onSpeak(q);
