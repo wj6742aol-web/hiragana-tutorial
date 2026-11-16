@@ -481,19 +481,13 @@
           <span class="float-kana">ア</span>
           <span class="float-kana">語</span>
         </div>
-        <div class="hero-copy">
+        <div class="hero-copy hub-copy">
           <p class="hero-brand">일본어 튜토리얼</p>
           <h1>먼저 큰 주제를 고르세요</h1>
           <p>문자 · 기초 · 실생활 · JLPT 중 하나를 고른 뒤, 세부 코스로 들어갑니다.</p>
+          <div class="category-grid hub-categories">${cards}</div>
+          <p class="api-credit">${escHtml(window.NihongoAPI?.attribution || "")}</p>
         </div>
-      </section>
-      <section class="section hub-section">
-        <div class="section-head">
-          <h2>학습 범위</h2>
-          <p>관심 있는 큰 분류를 탭하세요.</p>
-        </div>
-        <div class="category-grid">${cards}</div>
-        <p class="api-credit">${escHtml(window.NihongoAPI?.attribution || "")}</p>
       </section>
     `;
 

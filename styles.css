@@ -541,8 +541,27 @@ body {
 .hero.hub-hero {
   min-height: 0;
   padding-top: 5rem;
-  padding-bottom: 1.25rem;
+  padding-bottom: 2rem;
   align-items: end;
+}
+
+.hub-copy {
+  max-width: 1100px;
+  width: 100%;
+}
+
+.hub-copy .hero-brand {
+  font-size: clamp(2.1rem, 6vw, 3.6rem);
+}
+
+.hub-categories {
+  margin-top: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.hub-categories .category-card {
+  background: rgba(255, 255, 255, 0.78);
+  min-height: 9.5rem;
 }
 
 .hero-copy {
