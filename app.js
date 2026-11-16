@@ -114,13 +114,21 @@
 
   function updateProgress() {
     const t = tutorial();
-    if (!t) {
-      const done = window.TUTORIALS.reduce((n, x) => n + knownCount(x), 0);
-      const all = window.TUTORIALS.reduce((n, x) => n + totalCount(x), 0);
-      progressChip.textContent = `전체 ${done} / ${all}`;
+    if (t) {
+      progressChip.textContent = `${t.title} ${knownCount(t)} / ${totalCount(t)}`;
       return;
     }
-    progressChip.textContent = `${t.title} ${knownCount(t)} / ${totalCount(t)}`;
+    if (view.name === "group" && view.groupId) {
+      const items = window.tutorialsInGroup(view.groupId);
+      const done = items.reduce((n, x) => n + knownCount(x), 0);
+      const all = items.reduce((n, x) => n + totalCount(x), 0);
+      const g = window.getTutorialGroup(view.groupId);
+      progressChip.textContent = `${g?.title || "분류"} ${done} / ${all}`;
+      return;
+    }
+    const done = window.TUTORIALS.reduce((n, x) => n + knownCount(x), 0);
+    const all = window.TUTORIALS.reduce((n, x) => n + totalCount(x), 0);
+    progressChip.textContent = `전체 ${done} / ${all}`;
   }
 
   function setNav(active) {
@@ -366,6 +374,11 @@
       await renderHome();
       return;
     }
+    if (name === "group") {
+      setNav("home");
+      await renderGroup();
+      return;
+    }
     if (!tutorial()) {
       go({ name: "home" });
       return;
@@ -418,44 +431,48 @@
     else if (name === "quiz") renderQuiz();
   }
 
-  /* —— Home hub —— */
+  function tutorialCardHtml(t) {
+    const known = knownCount(t);
+    const total = totalCount(t);
+    const pct = total ? Math.round((known / total) * 100) : 0;
+    const remoteBadge = t.remoteLevel
+      ? `<span class="api-badge">KO</span>`
+      : "";
+    return `
+      <button type="button" class="tutorial-card" data-tutorial="${escHtml(t.id)}">
+        <span class="tutorial-accent" aria-hidden="true">${escHtml(t.accent)}</span>
+        <strong>${escHtml(t.title)}${remoteBadge}</strong>
+        <span class="tutorial-blurb">${escHtml(t.blurb)}</span>
+        <span class="tutorial-meta">${known} / ${total} · ${pct}%</span>
+      </button>`;
+  }
+
+  function bindTutorialCards(root) {
+    root.querySelectorAll("[data-tutorial]").forEach((btn) => {
+      btn.onclick = () =>
+        go({
+          name: "learn",
+          tutorialId: btn.dataset.tutorial,
+          filter: "",
+        });
+    });
+  }
+
+  /* —— Home: large categories only —— */
   async function renderHome() {
-    const cardHtml = (t) => {
-      const known = knownCount(t);
-      const total = totalCount(t);
-      const pct = total ? Math.round((known / total) * 100) : 0;
-      const remoteBadge = t.remoteLevel
-        ? `<span class="api-badge">KO</span>`
-        : "";
+    const cards = window.TUTORIAL_GROUPS.map((g) => {
+      const items = window.tutorialsInGroup(g.id);
+      const done = items.reduce((n, x) => n + knownCount(x), 0);
+      const all = items.reduce((n, x) => n + totalCount(x), 0);
+      const pct = all ? Math.round((done / all) * 100) : 0;
       return `
-        <button type="button" class="tutorial-card" data-tutorial="${t.id}">
-          <span class="tutorial-accent" aria-hidden="true">${t.accent}</span>
-          <strong>${t.title}${remoteBadge}</strong>
-          <span class="tutorial-blurb">${t.blurb}</span>
-          <span class="tutorial-meta">${known} / ${total} · ${pct}%</span>
+        <button type="button" class="category-card" data-group="${escHtml(g.id)}">
+          <span class="tutorial-accent" aria-hidden="true">${escHtml(g.accent)}</span>
+          <strong>${escHtml(g.title)}</strong>
+          <span class="tutorial-blurb">${escHtml(g.blurb)}</span>
+          <span class="tutorial-meta">${items.length}개 코스 · ${done} / ${all} · ${pct}%</span>
         </button>`;
-    };
-
-    const groups = [];
-    for (const t of window.TUTORIALS) {
-      const g = t.group || "기타";
-      let block = groups.find((x) => x.name === g);
-      if (!block) {
-        block = { name: g, items: [] };
-        groups.push(block);
-      }
-      block.items.push(t);
-    }
-
-    const sections = groups
-      .map(
-        (g) => `
-        <div class="hub-group">
-          <h3 class="hub-group-title">${g.name}</h3>
-          <div class="tutorial-grid">${g.items.map(cardHtml).join("")}</div>
-        </div>`
-      )
-      .join("");
+    }).join("");
 
     app.innerHTML = `
       <section class="hero hub-hero">
@@ -466,33 +483,65 @@
         </div>
         <div class="hero-copy">
           <p class="hero-brand">일본어 튜토리얼</p>
-          <h1>글자·실생활·JLPT 단어까지 골라서 익혀 보세요</h1>
-          <p>JLPT는 여러 목록을 합쳐 확장했고, N4부터는 누적 세트로 목표 개수에 맞춰 두었어요.</p>
+          <h1>먼저 큰 주제를 고르세요</h1>
+          <p>문자 · 기초 · 실생활 · JLPT 중 하나를 고른 뒤, 세부 코스로 들어갑니다.</p>
         </div>
       </section>
       <section class="section hub-section">
         <div class="section-head">
-          <h2>오늘의 랜덤 단어</h2>
-          <p id="dailyApiStatus">jlpt-vocab-api에서 가져오는 중…</p>
+          <h2>학습 범위</h2>
+          <p>관심 있는 큰 분류를 탭하세요.</p>
         </div>
-        <div class="daily-api-row" id="dailyApiRow"></div>
-        <div class="section-head" style="margin-top:2rem;">
-          <h2>튜토리얼</h2>
-          <p>하나를 골라 배우기·퀴즈로 이어가 보세요.</p>
-        </div>
-        ${sections}
-        <p class="api-credit">${window.NihongoAPI?.attribution || ""}</p>
+        <div class="category-grid">${cards}</div>
+        <p class="api-credit">${escHtml(window.NihongoAPI?.attribution || "")}</p>
       </section>
     `;
 
-    app.querySelectorAll("[data-tutorial]").forEach((btn) => {
-      btn.onclick = () =>
-        go({
-          name: "learn",
-          tutorialId: btn.dataset.tutorial,
-          filter: "",
-        });
+    app.querySelectorAll("[data-group]").forEach((btn) => {
+      btn.onclick = () => go({ name: "group", groupId: btn.dataset.group });
     });
+  }
+
+  /* —— Group: detailed tutorials —— */
+  async function renderGroup() {
+    const g = window.getTutorialGroup(view.groupId);
+    if (!g) {
+      go({ name: "home" });
+      return;
+    }
+    const items = window.tutorialsInGroup(g.id);
+    const showDaily = g.id === "daily" || g.id === "jlpt";
+
+    app.innerHTML = `
+      <section class="section group-section">
+        <button type="button" class="back-link" data-action="back-home">← 학습 범위</button>
+        <div class="section-head group-head">
+          <p class="group-kicker" aria-hidden="true">${escHtml(g.accent)}</p>
+          <h2>${escHtml(g.title)}</h2>
+          <p>${escHtml(g.blurb)}</p>
+        </div>
+        ${
+          showDaily
+            ? `<div class="section-head">
+                <h3 class="hub-group-title">오늘의 랜덤 단어</h3>
+                <p id="dailyApiStatus">불러오는 중…</p>
+              </div>
+              <div class="daily-api-row" id="dailyApiRow"></div>`
+            : ""
+        }
+        <div class="section-head" style="${showDaily ? "margin-top:1.75rem;" : ""}">
+          <h3 class="hub-group-title">세부 코스</h3>
+          <p>하나를 골라 배우기·퀴즈로 이어가 보세요.</p>
+        </div>
+        <div class="tutorial-grid">${items.map(tutorialCardHtml).join("")}</div>
+      </section>
+    `;
+
+    app.querySelector('[data-action="back-home"]').onclick = () =>
+      go({ name: "home" });
+    bindTutorialCards(app);
+
+    if (!showDaily) return;
 
     const row = app.querySelector("#dailyApiRow");
     const status = app.querySelector("#dailyApiStatus");
@@ -503,7 +552,6 @@
       view._daily = words;
       paintDaily(row, words);
     } catch (err) {
-      // 네트워크 없이도 정적 N5에서 랜덤
       const pool = window.VOCAB_REMOTE?.n5 || [];
       if (pool.length) {
         const words = shuffle(pool).slice(0, 6);
