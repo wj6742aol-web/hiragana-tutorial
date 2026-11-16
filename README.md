@@ -4,6 +4,10 @@
 
 원본: [wj6742aol-web/hiragana-tutorial](https://github.com/wj6742aol-web/hiragana-tutorial)
 
+## 온라인
+
+게시된 앱은 로컬 실행 없이 항상 열려 있습니다: https://hiragana-tutorial.apps.grok.bot
+
 ## 로컬 실행
 
 ```bash
