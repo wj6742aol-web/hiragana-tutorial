@@ -140,6 +140,10 @@
       progressChip.innerHTML = `<span>${escHtml(g?.title || "분류")}</span><strong>${done}/${all}</strong>`;
       return;
     }
+    if (view.name === "home" || !view.name) {
+      progressChip.innerHTML = `<span>범위</span><strong>${window.TUTORIAL_GROUPS.length}개</strong>`;
+      return;
+    }
     const done = window.TUTORIALS.reduce((n, x) => n + knownCount(x), 0);
     const all = window.TUTORIALS.reduce((n, x) => n + totalCount(x), 0);
     progressChip.innerHTML = `<span>전체</span><strong>${done}/${all}</strong>`;
@@ -214,7 +218,15 @@
           ? window.getTutorial(view.tutorialId)?.groupId
           : undefined);
     }
-    render();
+    render().then(() => markViewEnter());
+  }
+
+  function markViewEnter() {
+    const root = app.firstElementChild;
+    if (!root) return;
+    root.classList.remove("view-enter");
+    void root.offsetWidth;
+    root.classList.add("view-enter");
   }
 
   function escHtml(s) {
@@ -488,12 +500,12 @@
     else if (name === "quiz") renderQuiz();
   }
 
-  function tutorialCardHtml(t) {
+  function tutorialCardHtml(t, i = 0) {
     const known = knownCount(t);
     const total = totalCount(t);
     const pct = progressPct(known, total);
     return `
-      <button type="button" class="tutorial-card" data-tutorial="${escHtml(t.id)}">
+      <button type="button" class="tutorial-card" data-tutorial="${escHtml(t.id)}" style="--i:${i}">
         <span class="tutorial-accent" aria-hidden="true">${escHtml(t.accent)}</span>
         <strong>${escHtml(t.title)}</strong>
         <span class="tutorial-blurb">${escHtml(t.blurb)}</span>
@@ -521,12 +533,12 @@
 
   /* —— Home: large categories only —— */
   async function renderHome() {
-    const cards = window.TUTORIAL_GROUPS.map((g) => {
+    const cards = window.TUTORIAL_GROUPS.map((g, i) => {
       const items = window.tutorialsInGroup(g.id);
       const done = items.reduce((n, x) => n + knownCount(x), 0);
       const all = items.reduce((n, x) => n + totalCount(x), 0);
       return `
-        <button type="button" class="category-card" data-group="${escHtml(g.id)}">
+        <button type="button" class="category-card" data-group="${escHtml(g.id)}" style="--i:${i}">
           <span class="tutorial-accent" aria-hidden="true">${escHtml(g.accent)}</span>
           <strong>${escHtml(g.title)}</strong>
           <span class="tutorial-blurb">${escHtml(g.blurb)}</span>
@@ -544,11 +556,14 @@
           <span class="float-kana">あ</span>
           <span class="float-kana">ア</span>
           <span class="float-kana">語</span>
+          <span class="hero-wash"></span>
         </div>
         <div class="hero-copy hub-copy">
           <p class="hero-brand">일본어 튜토리얼</p>
-          <h1>학습할 범위를 고르세요</h1>
-          <p>한 번에 하나씩. 큰 주제 → 세부 코스 → 배우기·퀴즈.</p>
+          <h1>어디까지 배울까요</h1>
+          <p>문자 · 기초 · 실생활 · JLPT. 범위를 고르면 코스가 열립니다.</p>
+        </div>
+        <div class="hub-pick" role="navigation" aria-label="학습 범위">
           <div class="category-grid hub-categories">${cards}</div>
         </div>
       </section>
@@ -582,11 +597,9 @@
           all,
         })}
         <div class="course-block">
-          <div class="section-head compact">
-            <h3 class="hub-group-title">코스 선택</h3>
-            <p>원하는 코스를 누르면 바로 배우기로 이동합니다.</p>
-          </div>
-          <div class="tutorial-grid">${items.map(tutorialCardHtml).join("")}</div>
+          <div class="tutorial-grid">${items
+            .map((t, i) => tutorialCardHtml(t, i))
+            .join("")}</div>
         </div>
         ${
           showDaily
@@ -1940,5 +1953,5 @@
   });
 
   updateProgress();
-  render();
+  render().then(() => markViewEnter());
 })();
