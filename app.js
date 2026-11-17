@@ -822,12 +822,7 @@
   }
 
   function makeMiniQuestion(all, item) {
-    const types = [
-      "kana_to_romaji",
-      "romaji_to_kana",
-      "listen_to_kana",
-      "type_romaji",
-    ];
+    const types = ["kana_to_romaji", "romaji_to_kana", "listen_to_kana"];
     const type = types[Math.floor(Math.random() * types.length)];
     if (type === "kana_to_romaji") {
       return {
@@ -847,21 +842,13 @@
         options: distractorOptions(all, item, "kana"),
       };
     }
-    if (type === "listen_to_kana") {
-      return {
-        type,
-        item,
-        prompt: "들은 소리의 글자는?",
-        correct: item.kana,
-        options: distractorOptions(all, item, "kana"),
-        autoSpeak: true,
-      };
-    }
     return {
-      type: "type_romaji",
+      type: "listen_to_kana",
       item,
-      prompt: "로마자를 입력해 보세요.",
-      correct: item.romaji,
+      prompt: "들은 소리의 글자는?",
+      correct: item.kana,
+      options: distractorOptions(all, item, "kana"),
+      autoSpeak: true,
     };
   }
 
@@ -899,12 +886,16 @@
       }
     }
 
+    const hideDotAnswer =
+      activity === "mini" && view.miniQ?.type === "listen_to_kana";
     const dots = row.chars
       .map(
         (c, i) => `
         <button type="button" class="dot${i === index ? " active" : ""}${
           known.has(c.kana) ? " known" : ""
-        }" data-index="${i}">${c.kana}</button>`
+        }" data-index="${i}">${
+          hideDotAnswer && i === index ? "？" : c.kana
+        }</button>`
       )
       .join("");
 
@@ -944,7 +935,6 @@
         kana_to_romaji: "가나 → 로마자",
         romaji_to_kana: "로마자 → 가나",
         listen_to_kana: "듣기 → 가나",
-        type_romaji: "직접 입력",
       }[q.type];
 
       if (q.type === "romaji_to_kana") {
@@ -958,40 +948,22 @@
         focusInner = `<span class="big-kana">${q.item.kana}</span>`;
       }
 
-      if (q.type === "type_romaji") {
-        activityBody = `
-          <div class="activity-panel">
-            <p class="mini-type-tag">${typeLabel}</p>
-            <p class="activity-prompt">${q.prompt}</p>
-            <form class="recall-form" data-action="mini-type">
-              <input id="romajiInput" class="recall-input" type="text" inputmode="latin"
-                autocomplete="off" spellcheck="false" placeholder="로마자 입력" />
-              <button type="submit" class="btn btn-primary">확인</button>
-            </form>
-            <p class="recall-feedback" id="miniFeedback"></p>
-            <div class="lesson-controls">
-              <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
-              <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
-            </div>
-          </div>`;
-      } else {
-        activityBody = `
-          <div class="activity-panel">
-            <p class="mini-type-tag">${typeLabel}</p>
-            <p class="activity-prompt">${q.prompt}</p>
-            <div class="choices mini-choices">${q.options
-              .map(
-                (opt) =>
-                  `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
-              )
-              .join("")}</div>
-            <p class="recall-feedback" id="miniFeedback"></p>
-            <div class="lesson-controls">
-              <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
-              <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
-            </div>
-          </div>`;
-      }
+      activityBody = `
+        <div class="activity-panel">
+          <p class="mini-type-tag">${typeLabel}</p>
+          <p class="activity-prompt">${q.prompt}</p>
+          <div class="choices mini-choices">${q.options
+            .map(
+              (opt) =>
+                `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
+            )
+            .join("")}</div>
+          <p class="recall-feedback" id="miniFeedback"></p>
+          <div class="lesson-controls">
+            <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
+            <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
+          </div>
+        </div>`;
     } else if (activity === "speak") {
       focusInner = `
         <span class="big-kana">${ch.kana}</span>
@@ -1049,7 +1021,9 @@
           <div class="char-focus">${focusInner}</div>
           <div class="char-meta">
             <h3>${
-              activity === "mini" && view.miniQ.type === "listen_to_kana"
+              activity === "mini" &&
+              (view.miniQ.type === "listen_to_kana" ||
+                view.miniQ.type === "romaji_to_kana")
                 ? "？"
                 : ch.kana
             }</h3>
@@ -1149,26 +1123,6 @@
         view.miniLocked = false;
         renderLesson();
       };
-      const form = app.querySelector('[data-action="mini-type"]');
-      if (form) {
-        const input = form.querySelector("#romajiInput");
-        setTimeout(() => input?.focus(), 50);
-        form.onsubmit = (e) => {
-          e.preventDefault();
-          if (view.miniLocked) return;
-          if (normalizeRomaji(input.value) === normalizeRomaji(q.correct)) {
-            view.miniLocked = true;
-            feedback.textContent = "정답!";
-            feedback.className = "recall-feedback ok";
-            speak(ch.kana);
-            afterCorrect();
-          } else {
-            feedback.textContent = `힌트: ${q.correct.length}글자`;
-            feedback.className = "recall-feedback bad";
-            input.select();
-          }
-        };
-      }
       app.querySelectorAll("[data-choice]").forEach((btn) => {
         btn.onclick = () => {
           if (view.miniLocked) return;
@@ -1388,7 +1342,6 @@
       kana_to_romaji: "가나 → 로마자",
       romaji_to_kana: "로마자 → 가나",
       listen_to_kana: "듣기 → 가나",
-      type_romaji: "직접 입력",
     }[q.type];
     let promptHtml = `<span class="big-kana">${q.item.kana}</span>`;
     if (q.type === "romaji_to_kana")
@@ -1396,18 +1349,12 @@
     if (q.type === "listen_to_kana")
       promptHtml = `<button type="button" class="listen-big" data-action="speak"><span>♪</span><small>다시 듣기</small></button>`;
 
-    const answerArea =
-      q.type === "type_romaji"
-        ? `<form class="recall-form" data-action="drill-type" style="justify-content:center;">
-            <input id="drillInput" class="recall-input" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="로마자" />
-            <button type="submit" class="btn btn-primary">확인</button>
-          </form>`
-        : `<div class="choices">${q.options
-            .map(
-              (opt) =>
-                `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
-            )
-            .join("")}</div>`;
+    const answerArea = `<div class="choices">${q.options
+      .map(
+        (opt) =>
+          `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
+      )
+      .join("")}</div>`;
 
     app.innerHTML = `
       <section class="section">
@@ -1462,15 +1409,6 @@
       }, 850);
     };
 
-    const form = app.querySelector('[data-action="drill-type"]');
-    if (form) {
-      const input = form.querySelector("#drillInput");
-      setTimeout(() => input?.focus(), 50);
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        finish(normalizeRomaji(input.value) === normalizeRomaji(q.correct));
-      };
-    }
     app.querySelectorAll("[data-choice]").forEach((btn) => {
       btn.onclick = () => {
         if (view.drillLocked) return;
@@ -1487,7 +1425,7 @@
 
   /* —— Phrase lessons —— */
   function makePhraseQuestion(items, item) {
-    const types = ["jp_to_ko", "ko_to_jp", "listen_to_ko", "type_romaji"];
+    const types = ["jp_to_ko", "ko_to_jp", "listen_to_ko"];
     const type = types[Math.floor(Math.random() * types.length)];
     const others = shuffle(items.filter((x) => x.id !== item.id)).slice(0, 3);
     if (type === "jp_to_ko") {
@@ -1508,21 +1446,13 @@
         options: shuffle([item.jp, ...others.map((x) => x.jp)]),
       };
     }
-    if (type === "listen_to_ko") {
-      return {
-        type,
-        item,
-        prompt: "들은 말의 뜻은?",
-        correct: item.ko,
-        options: shuffle([item.ko, ...others.map((x) => x.ko)]),
-        autoSpeak: true,
-      };
-    }
     return {
-      type: "type_romaji",
+      type: "listen_to_ko",
       item,
-      prompt: "로마자를 입력해 보세요.",
-      correct: item.romaji,
+      prompt: "들은 말의 뜻은?",
+      correct: item.ko,
+      options: shuffle([item.ko, ...others.map((x) => x.ko)]),
+      autoSpeak: true,
     };
   }
 
@@ -1656,47 +1586,35 @@
         jp_to_ko: "일본어 → 뜻",
         ko_to_jp: "뜻 → 일본어",
         listen_to_ko: "듣기 → 뜻",
-        type_romaji: "로마자 입력",
       }[q.type];
       if (q.type === "ko_to_jp") {
         focus = `<span class="big-romaji">${item.ko}</span>`;
       } else if (q.type === "listen_to_ko") {
         focus = `<button type="button" class="listen-big" data-action="speak"><span>♪</span><small>다시 듣기</small></button>`;
       }
-      if (q.type === "type_romaji") {
-        body = `
-          <div class="activity-panel">
-            <p class="mini-type-tag">${typeLabel}</p>
-            <p class="activity-prompt">${q.prompt}</p>
-            <form class="recall-form" data-action="mini-type">
-              <input id="romajiInput" class="recall-input" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="예: ${item.romaji}" />
-              <button type="submit" class="btn btn-primary">확인</button>
-            </form>
-            <p class="recall-feedback" id="miniFeedback"></p>
-            <div class="lesson-controls">
-              <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
-              <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
-            </div>
-          </div>`;
-      } else {
-        body = `
-          <div class="activity-panel">
-            <p class="mini-type-tag">${typeLabel}</p>
-            <p class="activity-prompt">${q.prompt}</p>
-            <div class="choices mini-choices">${q.options
-              .map(
-                (opt) =>
-                  `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
-              )
-              .join("")}</div>
-            <p class="recall-feedback" id="miniFeedback"></p>
-            <div class="lesson-controls">
-              <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
-              <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
-            </div>
-          </div>`;
-      }
+      body = `
+        <div class="activity-panel">
+          <p class="mini-type-tag">${typeLabel}</p>
+          <p class="activity-prompt">${q.prompt}</p>
+          <div class="choices mini-choices">${q.options
+            .map(
+              (opt) =>
+                `<button type="button" class="choice" data-choice="${opt}">${opt}</button>`
+            )
+            .join("")}</div>
+          <p class="recall-feedback" id="miniFeedback"></p>
+          <div class="lesson-controls">
+            <button type="button" class="btn btn-ghost" data-action="new-mini">다른 방식</button>
+            <button type="button" class="btn btn-ghost" data-action="speak">발음 듣기</button>
+          </div>
+        </div>`;
     }
+
+    const metaTitle =
+      activity === "mini" &&
+      (view.miniQ.type === "listen_to_ko" || view.miniQ.type === "ko_to_jp")
+        ? "？"
+        : item.jp;
 
     app.innerHTML = `
       <section class="section">
@@ -1711,7 +1629,7 @@
         <div class="char-stage">
           <div class="char-focus">${focus}</div>
           <div class="char-meta">
-            <h3>${item.jp}</h3>
+            <h3>${metaTitle}</h3>
             ${body}
             <div class="lesson-controls nav-row">
               <button type="button" class="btn btn-ghost" data-action="prev" ${
@@ -1818,28 +1736,6 @@
           else switchItem(index + 1, { activity: "mini" });
         }, 750);
       };
-      const form = app.querySelector('[data-action="mini-type"]');
-      if (form) {
-        const input = form.querySelector("#romajiInput");
-        setTimeout(() => input?.focus(), 50);
-        form.onsubmit = (e) => {
-          e.preventDefault();
-          if (view.miniLocked) return;
-          const ok =
-            normalizeRomaji(input.value) === normalizeRomaji(q.correct);
-          if (ok) {
-            view.miniLocked = true;
-            feedback.textContent = "정답!";
-            feedback.className = "recall-feedback ok";
-            speak(item.reading || item.jp);
-            afterOk();
-          } else {
-            feedback.textContent = "다시 시도해 보세요.";
-            feedback.className = "recall-feedback bad";
-            input.select();
-          }
-        };
-      }
       app.querySelectorAll("[data-choice]").forEach((btn) => {
         btn.onclick = () => {
           if (view.miniLocked) return;
@@ -1959,19 +1855,12 @@
         promptHtml = `<button type="button" class="listen-big" data-action="speak"><span>♪</span><small>다시 듣기</small></button>`;
     }
 
-    const answerArea =
-      q.type === "type_romaji"
-        ? `<form class="recall-form" data-action="quiz-type" style="justify-content:center;">
-            <label class="sr-only" for="quizInput">로마자 답</label>
-            <input id="quizInput" class="recall-input" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="로마자" />
-            <button type="submit" class="btn btn-primary">확인</button>
-          </form>`
-        : `<div class="choices">${(q.options || [])
-            .map(
-              (opt) =>
-                `<button type="button" class="choice" data-choice="${escHtml(opt)}">${escHtml(opt)}</button>`
-            )
-            .join("")}</div>`;
+    const answerArea = `<div class="choices">${(q.options || [])
+      .map(
+        (opt) =>
+          `<button type="button" class="choice" data-choice="${escHtml(opt)}">${escHtml(opt)}</button>`
+      )
+      .join("")}</div>`;
 
     const step = view.qIndex + 1;
     app.innerHTML = `
@@ -2025,15 +1914,6 @@
       }, 900);
     };
 
-    const form = app.querySelector('[data-action="quiz-type"]');
-    if (form) {
-      const input = form.querySelector("#quizInput");
-      setTimeout(() => input?.focus(), 50);
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        finish(normalizeRomaji(input.value) === normalizeRomaji(q.correct));
-      };
-    }
     app.querySelectorAll("[data-choice]").forEach((btn) => {
       btn.onclick = () => {
         if (view.locked) return;
